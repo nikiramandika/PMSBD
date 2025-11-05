@@ -54,6 +54,7 @@ class KasirController extends Controller
             'treatments.*.qty' => 'required|integer|min:1'
         ]);
 
+        // Calculate total and prepare details
         $totalHarga = 0;
         $transactionDetails = [];
 
@@ -71,19 +72,118 @@ class KasirController extends Controller
             ];
         }
 
-        $transaction = Transaction::create([
-            'customer_id' => $request->customer_id,
-            'user_id' => auth()->id(),
-            'tanggal' => now(),
-            'total_harga' => $totalHarga,
-        ]);
+        // ============================================
+        // TIPE 1: MySQL Transaction (Manual SQL Query)
+        // ============================================
+        try {
+            DB::beginTransaction();
 
-        foreach ($transactionDetails as $detail) {
-            $detail['transaction_id'] = $transaction->id;
-            TransactionDetail::create($detail);
+            // Insert transaction using raw SQL dan dapatkan ID
+            DB::insert("
+                INSERT INTO transactions (customer_id, user_id, tanggal, total_harga, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'selesai', NOW(), NOW())
+            ", [
+                $request->customer_id,
+                auth()->id(),
+                now(),
+                $totalHarga
+            ]);
+
+            // Ambil ID yang baru saja diinsert
+            $transactionId = DB::getPdo()->lastInsertId();
+
+            // Insert transaction details using raw SQL
+            foreach ($transactionDetails as $detail) {
+                DB::insert("
+                    INSERT INTO transaction_details (transaction_id, treatment_id, harga, qty, subtotal, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+                ", [
+                    $transactionId,
+                    $detail['treatment_id'],
+                    $detail['harga'],
+                    $detail['qty'],
+                    $detail['subtotal']
+                ]);
+            }
+
+            DB::commit();
+            return redirect()->route('kasir.transactions')->with('success', 'Transaksi berhasil dibuat dengan MySQL Transaction!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Gagal membuat transaksi: ' . $e->getMessage());
         }
 
-        return redirect()->route('kasir.transactions')->with('success', 'Transaksi berhasil dibuat!');
+        // =======================================
+        // TIPE 2: Laravel DB Builder Transaction
+        // =======================================
+        /*
+        try {
+            DB::beginTransaction();
+
+            // Insert transaction using DB Builder
+            $transactionId = DB::table('transactions')->insertGetId([
+                'customer_id' => $request->customer_id,
+                'user_id' => auth()->id(),
+                'tanggal' => now(),
+                'total_harga' => $totalHarga,
+                'status' => 'selesai',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            // Insert transaction details using DB Builder
+            foreach ($transactionDetails as $detail) {
+                DB::table('transaction_details')->insert([
+                    'transaction_id' => $transactionId,
+                    'treatment_id' => $detail['treatment_id'],
+                    'harga' => $detail['harga'],
+                    'qty' => $detail['qty'],
+                    'subtotal' => $detail['subtotal'],
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            }
+
+            DB::commit();
+            return redirect()->route('kasir.transactions')->with('success', 'Transaksi berhasil dibuat dengan DB Builder Transaction!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Gagal membuat transaksi: ' . $e->getMessage());
+        }
+        */
+
+        // =====================================
+        // TIPE 3: Laravel Eloquent Transaction 
+        // =====================================
+        /*
+        try {
+            DB::beginTransaction();
+
+            // Insert transaction using Eloquent
+            $transaction = Transaction::create([
+                'customer_id' => $request->customer_id,
+                'user_id' => auth()->id(),
+                'tanggal' => now(),
+                'total_harga' => $totalHarga,
+                'status' => 'selesai'
+            ]);
+
+            // Insert transaction details using Eloquent
+            foreach ($transactionDetails as $detail) {
+                $detail['transaction_id'] = $transaction->id;
+                TransactionDetail::create($detail);
+            }
+
+            DB::commit();
+            return redirect()->route('kasir.transactions')->with('success', 'Transaksi berhasil dibuat dengan Laravel Eloquent Transaction!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Gagal membuat transaksi: ' . $e->getMessage());
+        }
+        */
     }
 
     public function transactions()
@@ -155,4 +255,5 @@ class KasirController extends Controller
         return redirect()->back()
             ->with('success', 'Transaksi #' . $id . ' berhasil dibatalkan.');
     }
+
 }

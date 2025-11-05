@@ -95,7 +95,7 @@ class AdminController extends Controller
     }
 
     /**
-     * Cancel a transaction by updating status to "dibatalkan" using stored procedure.
+     * Cancel a transaction dengan 3 tipe transaction approach.
      */
     public function cancelTransaction(Request $request, $id)
     {
@@ -105,18 +105,96 @@ class AdminController extends Controller
             'alasan' => 'required|string|max:255'
         ]);
 
-        // Update status ke "dibatalkan"
-        $transaction->update(['status' => 'dibatalkan']);
+        // ===============================================
+        // TIPE 1: MySQL Transaction (Manual SQL + Stored Procedure)
+        // ===============================================
+        try {
+            DB::beginTransaction();
 
-        // Panggil stored procedure untuk logging dengan data user yang sedang login
-        DB::statement('CALL log_pembatalan_procedure(?, ?, ?)', [
-            $transaction->id,
-            $request->alasan,
-            auth()->user()->name
-        ]);
+            // Update status menggunakan raw SQL
+            DB::update("
+                UPDATE transactions
+                SET status = 'dibatalkan', updated_at = NOW()
+                WHERE id = ?
+            ", [$id]);
 
-        return redirect()->back()
-            ->with('success', 'Transaksi #' . $id . ' berhasil dibatalkan.');
+            // Panggil stored procedure untuk logging
+            DB::statement('CALL log_pembatalan_procedure(?, ?, ?)', [
+                $id,
+                $request->alasan,
+                auth()->user()->name
+            ]);
+
+            DB::commit();
+            return redirect()->back()
+                ->with('success', 'Transaksi #' . $id . ' berhasil dibatalkan dengan MySQL Transaction!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->with('error', 'Gagal membatalkan transaksi: ' . $e->getMessage());
+        }
+
+        // ========================================================
+        // TIPE 2: Laravel DB Builder Transaction + Stored Procedure
+        // ========================================================
+        /*
+        try {
+            DB::beginTransaction();
+
+            // Update status menggunakan DB Builder
+            DB::table('transactions')
+                ->where('id', $id)
+                ->update([
+                    'status' => 'dibatalkan',
+                    'updated_at' => now()
+                ]);
+
+            // Panggil stored procedure untuk logging
+            DB::statement('CALL log_pembatalan_procedure(?, ?, ?)', [
+                $id,
+                $request->alasan,
+                auth()->user()->name
+            ]);
+
+            DB::commit();
+            return redirect()->back()
+                ->with('success', 'Transaksi #' . $id . ' berhasil dibatalkan dengan DB Builder Transaction!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->with('error', 'Gagal membatalkan transaksi: ' . $e->getMessage());
+        }
+        */
+
+        // ====================================================
+        // TIPE 3: Laravel Eloquent Transaction + Stored Procedure
+        // ====================================================
+        /*
+        try {
+            DB::beginTransaction();
+
+            // Update status menggunakan Eloquent
+            $transaction->update(['status' => 'dibatalkan']);
+
+            // Panggil stored procedure untuk logging
+            DB::statement('CALL log_pembatalan_procedure(?, ?, ?)', [
+                $transaction->id,
+                $request->alasan,
+                auth()->user()->name
+            ]);
+
+            DB::commit();
+            return redirect()->back()
+                ->with('success', 'Transaksi #' . $id . ' berhasil dibatalkan dengan Laravel Eloquent Transaction!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->with('error', 'Gagal membatalkan transaksi: ' . $e->getMessage());
+        }
+        */
     }
 
     /**
