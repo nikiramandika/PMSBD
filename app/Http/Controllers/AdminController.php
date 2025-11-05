@@ -7,7 +7,6 @@ use App\Models\Treatment;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\LogPembatalan;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -19,20 +18,20 @@ class AdminController extends Controller
     {
         $totalCustomers = Customer::count();
         $totalTreatments = Treatment::count();
-        $totalTransactions = Transaction::count();
-        $totalRevenue = Transaction::sum('total_harga');
+        $totalTransactions = Transaction::getTotalTransactionsCount();
+        $totalRevenue = Transaction::getTotalRevenue();
 
-        $todayTransactions = Transaction::whereDate('tanggal', Carbon::today())->count();
-        $todayRevenue = Transaction::whereDate('tanggal', Carbon::today())->sum('total_harga');
+        $todayTransactions = Transaction::getTodayTransactionsCount();
+        $todayRevenue = Transaction::getTodayRevenue();
 
-        $monthlyTransactions = Transaction::whereMonth('tanggal', Carbon::now()->month)
-                                        ->whereYear('tanggal', Carbon::now()->year)
-                                        ->count();
-        $monthlyRevenue = Transaction::whereMonth('tanggal', Carbon::now()->month)
-                                    ->whereYear('tanggal', Carbon::now()->year)
-                                    ->sum('total_harga');
+        $monthlyTransactions = Transaction::getMonthTransactionsCount();
+        $monthlyRevenue = Transaction::getMonthRevenue();
+
+        $yearTransactions = Transaction::getYearTransactionsCount();
+        $yearRevenue = Transaction::getYearRevenue();
 
         $recentTransactions = Transaction::with(['customer', 'user'])
+                                       ->active()
                                        ->latest()
                                        ->take(5)
                                        ->get();
@@ -51,6 +50,8 @@ class AdminController extends Controller
             'todayRevenue',
             'monthlyTransactions',
             'monthlyRevenue',
+            'yearTransactions',
+            'yearRevenue',
             'recentTransactions',
             'topTreatments'
         ));
@@ -73,7 +74,18 @@ class AdminController extends Controller
         $transactions = Transaction::with(['customer', 'user', 'transactionDetails.treatment'])
                                   ->latest()
                                   ->get();
-        return view('admin.transactions', compact('transactions'));
+
+        // Calculate statistics using MySQL functions
+        $stats = [
+            'totalTransactions' => Transaction::getTotalTransactionsCount(),
+            'totalRevenue' => Transaction::getTotalRevenue(),
+            'todayTransactions' => Transaction::getTodayTransactionsCount(),
+            'averageTransaction' => Transaction::getTotalTransactionsCount() > 0
+                ? Transaction::getTotalRevenue() / Transaction::getTotalTransactionsCount()
+                : 0
+        ];
+
+        return view('admin.transactions', compact('transactions', 'stats'));
     }
 
     public function users()

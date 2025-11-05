@@ -35,7 +35,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Total Transaksi</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ $transactions->count() }}</p>
+                        <p class="text-2xl font-bold text-gray-900">{{ $stats['totalTransactions'] }}</p>
                     </div>
                 </div>
             </div>
@@ -49,7 +49,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Total Pendapatan</p>
-                        <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($transactions->sum('total_harga'), 0, ',', '.') }}</p>
+                        <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($stats['totalRevenue'], 0, ',', '.') }}</p>
                     </div>
                 </div>
             </div>
@@ -63,7 +63,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Rata-rata Transaksi</p>
-                        <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($transactions->count() > 0 ? $transactions->sum('total_harga') / $transactions->count() : 0, 0, ',', '.') }}</p>
+                        <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($stats['averageTransaction'], 0, ',', '.') }}</p>
                     </div>
                 </div>
             </div>

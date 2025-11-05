@@ -16,14 +16,15 @@ class KasirController extends Controller
 
     public function dashboard()
     {
-        $todayTransactions = Transaction::whereDate('tanggal', Carbon::today())->count();
-        $todayRevenue = Transaction::whereDate('tanggal', Carbon::today())->sum('total_harga');
+        $todayTransactions = Transaction::getTodayTransactionsCount();
+        $todayRevenue = Transaction::getTodayRevenue();
 
-        $myTransactions = Transaction::where('user_id', auth()->id())->count();
-        $myRevenue = Transaction::where('user_id', auth()->id())->sum('total_harga');
+        $myTransactions = Transaction::getUserTransactionsCount(auth()->id());
+        $myRevenue = Transaction::getUserRevenue(auth()->id());
 
         $recentTransactions = Transaction::with(['customer'])
                                        ->where('user_id', auth()->id())
+                                       ->active()
                                        ->latest()
                                        ->take(5)
                                        ->get();
@@ -91,7 +92,18 @@ class KasirController extends Controller
                                   ->where('user_id', auth()->id())
                                   ->latest()
                                   ->get();
-        return view('kasir.transactions', compact('transactions'));
+
+        // Calculate statistics using MySQL functions for current user
+        $userId = auth()->id();
+        $stats = [
+            'totalTransactions' => Transaction::getUserTransactionsCount($userId),
+            'totalRevenue' => Transaction::getUserRevenue($userId),
+            'averageTransaction' => Transaction::getUserTransactionsCount($userId) > 0
+                ? Transaction::getUserRevenue($userId) / Transaction::getUserTransactionsCount($userId)
+                : 0
+        ];
+
+        return view('kasir.transactions', compact('transactions', 'stats'));
     }
 
     public function showTransaction($id)
